@@ -1,4 +1,6 @@
 # `cg2cs`
+[![CI](https://github.com/koisland/cg2cs/actions/workflows/ci.yaml/badge.svg)](https://github.com/koisland/cg2cs/actions/workflows/ci.yaml)
+
 Library for converting cigar strings to cs tags and vice-versa.
 
 ## Usage
