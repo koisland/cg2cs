@@ -13,7 +13,7 @@ use cg2cs::cs_to_cg;
 let res = cs_to_cg(":10=ACGTN+acgtn-acgtn*at=A").unwrap();
 assert_eq!(
     res.repr(),
-    "10=5=5I5D1X1=".to_string()
+    "10=5=5I5D1X1="
 )
 ```
 
@@ -29,6 +29,6 @@ assert_eq!(
 )
 ```
 
-## Sources
+## References
 * https://lh3.github.io/minimap2/minimap2.html
 * https://github.com/lh3/minimap2/blob/79c9cc186b95f50bd899f69b48eba995ced810c6/format.c#L171

@@ -22,13 +22,13 @@ pub use cs::{CS, CSKind, CSOp};
 /// let res = cs_to_cg(":10=ACGTN+acgtn-acgtn*at=A").unwrap();
 /// assert_eq!(
 ///     res.repr(),
-///     "10=5=5I5D1X1=".to_string()
+///     "10=5=5I5D1X1="
 /// )
 /// ```
 pub fn cs_to_cg(cs: &str) -> Result<Cigar, Box<dyn Error>> {
     let cg_ops: Vec<CigarOp> = cs_str_to_cs_ops(cs)?
         .into_iter()
-        .map(|cs_op| CigarOp::from(cs_op))
+        .map(CigarOp::from)
         .collect();
     Ok(Cigar::from(cg_ops))
 }
@@ -49,7 +49,7 @@ pub fn cs_to_cg(cs: &str) -> Result<Cigar, Box<dyn Error>> {
 /// let ops = cs_str_to_cs_ops(":2*cg-aa:3").unwrap();
 /// let ops: Vec<(CSKind, usize, Option<String>)> = ops
 ///     .iter()
-///     .map(|op| (op.kind(), op.len(), op.seq().map(|s| s.to_owned())))
+///     .map(|op| (op.kind(), op.length(), op.seq().map(|s| s.to_owned())))
 ///     .collect();
 /// let exp = vec![
 ///     (CSKind::Match, 2, None),
@@ -151,7 +151,7 @@ pub fn cs_str_to_cs_ops(cs: &str) -> Result<Vec<CSOp>, Box<dyn Error>> {
 /// use cg2cs::{cg_str_to_cg_ops, Kind};
 ///
 /// let res = cg_str_to_cg_ops("2=1X2D3=").unwrap();
-/// let res = res.iter().map(|op| (op.kind(), op.len())).collect::<Vec<(Kind, usize)>>();
+/// let res = res.iter().map(|op| (op.kind(), op.length())).collect::<Vec<(Kind, usize)>>();
 /// let exp: Vec<(Kind, usize)> = vec![
 ///     (Kind::SequenceMatch, 2),
 ///     (Kind::SequenceMismatch, 1),
@@ -172,7 +172,7 @@ pub fn cg_str_to_cg_ops(cg: &str) -> Result<Vec<CigarOp>, Box<dyn Error>> {
                 prev_num = Some(elems.into_iter().collect::<String>().parse()?)
             }
             (None, CGToken::Kind(kind)) => {
-                return Err(format!("Invalid starting token ({kind:?})"))?;
+                Err(format!("Invalid starting token ({kind:?})"))?;
             }
             (Some(number), CGToken::Kind(kind)) => {
                 ops.push(CigarOp::new(*kind, *number));
@@ -180,7 +180,7 @@ pub fn cg_str_to_cg_ops(cg: &str) -> Result<Vec<CigarOp>, Box<dyn Error>> {
             }
             (Some(number), CGToken::Number) => {
                 let curr_num: usize = elems.into_iter().collect::<String>().parse()?;
-                return Err(format!(
+                Err(format!(
                     "Invalid number followed by number ({number:?}, {curr_num:?})"
                 ))?;
             }
@@ -189,7 +189,6 @@ pub fn cg_str_to_cg_ops(cg: &str) -> Result<Vec<CigarOp>, Box<dyn Error>> {
 
     Ok(ops)
 }
-
 
 /// Convert a cigar string to a difference (`cs`) string.
 /// * Adapted from [`minimap2::write_cs_ds_core`](https://github.com/lh3/minimap2/blob/79c9cc186b95f50bd899f69b48eba995ced810c6/format.c#L171)

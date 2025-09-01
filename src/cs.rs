@@ -1,11 +1,11 @@
 use std::error::Error;
 
-use crate::{cg::Kind, cs_str_to_cs_ops, CigarOp};
+use crate::{CigarOp, cg::Kind, cs_str_to_cs_ops};
 
 /// `cs` tag operations
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum CSKind {
-    /// Identical sequence (short and long form) 
+    /// Identical sequence (short and long form)
     Match,
     /// Substitution: ref to query
     Mismatch,
@@ -40,7 +40,7 @@ impl CSOp {
     }
 
     /// `cs` operation length
-    pub fn len(&self) -> usize {
+    pub fn length(&self) -> usize {
         self.len
     }
 
@@ -176,11 +176,10 @@ impl CS {
     /// assert!(CS::new(":2*cg-aa:3").is_ok());
     /// ```
     pub fn new(cs: &str) -> Result<Self, Box<dyn Error>> {
-        cs_str_to_cs_ops(cs).map(|ops| CS::from(ops))
+        cs_str_to_cs_ops(cs).map(CS::from)
     }
 
     /// Get `cs` string representation.
-    ///
     /// ```
     /// use cg2cs::{cs_str_to_cs_ops, CS};
     /// let cs = CS::new(":2*cg-aa:3").unwrap();
@@ -194,7 +193,6 @@ impl CS {
     }
 
     /// Get `cs` operations.
-    ///
     /// ```
     /// use cg2cs::{cg_to_cs, CSKind, CS};
     /// let cs = CS::new(":2*cg-aa:3").unwrap();
@@ -204,7 +202,6 @@ impl CS {
         &self.ops
     }
     /// Get `cs` as tag.
-    ///
     /// ```
     /// use cg2cs::CS;
     /// let cs = CS::new(":2*cg-aa:3").unwrap();

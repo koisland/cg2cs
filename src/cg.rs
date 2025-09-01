@@ -52,11 +52,13 @@ impl CigarOp {
         Self { kind, len }
     }
 
+    /// Cigar operation kind
     pub fn kind(&self) -> Kind {
         self.kind
     }
 
-    pub fn len(&self) -> usize {
+    /// Cigar operation length
+    pub fn length(&self) -> usize {
         self.len
     }
 }
@@ -98,15 +100,14 @@ impl Cigar {
     /// Create cigar from string.
     /// ```
     /// use cg2cs::Cigar;
-    /// 
+    ///
     /// assert!(Cigar::new("2=1X2D3=").is_ok());
     /// ```
     pub fn new(cg: &str) -> Result<Self, Box<dyn Error>> {
-        cg_str_to_cg_ops(cg).map(|ops| Cigar::from(ops))
+        cg_str_to_cg_ops(cg).map(Cigar::from)
     }
 
     /// Get cigar string representation.
-    ///
     /// ```
     /// use cg2cs::Cigar;
     /// let cg_str = "2=1X2D3=";
@@ -118,7 +119,6 @@ impl Cigar {
     }
 
     /// Get cigar operations.
-    ///
     /// ```
     /// use cg2cs::{cg_str_to_cg_ops, Cigar};
     /// let ops = cg_str_to_cg_ops("2=1X2D3=").unwrap();
@@ -130,7 +130,6 @@ impl Cigar {
     }
 
     /// Get cigar as tag.
-    ///
     /// ```
     /// use cg2cs::Cigar;
     /// let cg = Cigar::new("2=1X2D3=").unwrap();
