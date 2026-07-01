@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{borrow::Cow, error::Error};
 
 use crate::{CigarOp, cg::Kind, cs_str_to_cs_ops};
 
@@ -19,19 +19,15 @@ pub enum CSKind {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct CSOp {
+pub struct CSOp<'src> {
     pub(crate) kind: CSKind,
     pub(crate) len: usize,
-    pub(crate) seq: Option<String>,
+    pub(crate) seq: Option<Cow<'src, str>>,
 }
 
-impl CSOp {
-    pub(crate) fn new(kind: CSKind, len: usize, seq: Option<&str>) -> Self {
-        Self {
-            kind,
-            len,
-            seq: seq.map(|s| s.to_owned()),
-        }
+impl<'src> CSOp<'src> {
+    pub(crate) fn new(kind: CSKind, len: usize, seq: Option<Cow<'src, str>>) -> Self {
+        Self { kind, len, seq }
     }
 
     /// `cs` operation kind
@@ -58,7 +54,7 @@ impl CSOp {
     }
 }
 
-impl From<CSOp> for String {
+impl From<CSOp<'_>> for String {
     fn from(op: CSOp) -> Self {
         match op.kind {
             CSKind::Match => {
@@ -87,7 +83,7 @@ impl From<CSOp> for String {
     }
 }
 
-impl From<CSOp> for CigarOp {
+impl From<CSOp<'_>> for CigarOp {
     fn from(op: CSOp) -> Self {
         let cigar_kind = match op.kind {
             CSKind::Match => Kind::SequenceMatch,
@@ -164,19 +160,19 @@ impl TryFrom<CSToken> for Kind {
 /// Difference string (`cs`) tag.
 /// * See https://lh3.github.io/minimap2/minimap2.html
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct CS {
+pub struct CS<'src> {
     repr: String,
-    ops: Vec<CSOp>,
+    ops: Vec<CSOp<'src>>,
 }
 
-impl CS {
+impl<'src> CS<'src> {
     /// Create `cs` tag from string
     /// ```
     /// use cg2cs::CS;
     /// assert!(CS::new(":2*cg-aa:3").is_ok());
     /// ```
-    pub fn new(cs: &str) -> Result<Self, Box<dyn Error>> {
-        cs_str_to_cs_ops(cs).map(CS::from)
+    pub fn new(cs: &'src str) -> Result<Self, Box<dyn Error>> {
+        cs_str_to_cs_ops(cs, true).map(CS::from)
     }
 
     /// Get `cs` string representation.
@@ -198,7 +194,7 @@ impl CS {
     /// let cs = CS::new(":2*cg-aa:3").unwrap();
     /// assert_eq!(cs.ops().len(), 4)
     /// ```
-    pub fn ops(&self) -> &[CSOp] {
+    pub fn ops(&'src self) -> &'src [CSOp<'src>] {
         &self.ops
     }
     /// Get `cs` as tag.
@@ -212,8 +208,8 @@ impl CS {
     }
 }
 
-impl From<Vec<CSOp>> for CS {
-    fn from(ops: Vec<CSOp>) -> Self {
+impl<'src> From<Vec<CSOp<'src>>> for CS<'src> {
+    fn from(ops: Vec<CSOp<'src>>) -> Self {
         let mut repr = String::new();
         for op in ops.iter() {
             repr.push_str(&Into::<String>::into(op.clone()));
