@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use std::error::Error;
+use std::{borrow::Cow, error::Error};
 
 mod cg;
 mod cs;
@@ -59,17 +59,16 @@ pub fn cs_to_cg(cs: &str) -> Result<Cigar, Box<dyn Error>> {
 /// ];
 /// assert_eq!(ops, exp)
 /// ```
-pub fn cs_str_to_cs_ops(cs: &str) -> Result<Vec<CSOp>, Box<dyn Error>> {
+pub fn cs_str_to_cs_ops<'src>(cs: &'src str) -> Result<Vec<CSOp<'src>>, Box<dyn Error>> {
     let cs = cs.as_bytes();
     let mut new_ops = vec![];
     let mut curr_op: Option<CSToken> = None;
+    let mut offset = 0;
     // TODO: If intron added, convert to queue.
     for (tk, elems) in &cs
         .iter()
         .chunk_by(|c| TryInto::<CSToken>::try_into(**c).unwrap())
     {
-        let elems: Vec<&u8> = elems.collect();
-
         match (curr_op.as_ref(), &tk) {
             // Consume first token.
             (None, CSToken::Identical)
@@ -77,46 +76,63 @@ pub fn cs_str_to_cs_ops(cs: &str) -> Result<Vec<CSOp>, Box<dyn Error>> {
             | (None, CSToken::Substitution)
             | (None, CSToken::Insertion)
             | (None, CSToken::Deletion)
-            | (None, CSToken::Intron) => curr_op = Some(tk.clone()),
+            | (None, CSToken::Intron) => {
+                curr_op = Some(tk.clone());
+                offset += 1;
+            }
             (None, _) => Err(format!("Invalid starting token: {tk:?}"))?,
             // Then fill in by type.
 
             // Identical
             (Some(CSToken::Identical), CSToken::Number) => {
+                let elems_len = elems.count();
                 new_ops.push(CSOp {
                     kind: CSKind::Match,
-                    len: elems.into_iter().map(|e| char::from(*e)).join("").parse()?,
+                    len: str::from_utf8(&cs[offset..offset + elems_len])?.parse()?,
                     seq: None,
                 });
+                offset += elems_len;
                 curr_op.take();
             }
             // Identical long
             (Some(CSToken::IdenticalLong), CSToken::Base) => {
+                let elems_len = elems.count();
                 new_ops.push(CSOp {
                     kind: CSKind::Match,
-                    len: elems.len(),
-                    seq: Some(elems.into_iter().map(|e| char::from(*e)).join("")),
+                    len: elems_len,
+                    seq: Some(Cow::Borrowed(str::from_utf8(
+                        &cs[offset..offset + elems_len],
+                    )?)),
                 });
+                offset += elems_len;
                 curr_op.take();
             }
             // Substitution/mismatch
             (Some(CSToken::Substitution), CSToken::Base) => {
+                let elems_len = elems.count();
                 new_ops.push(CSOp {
                     kind: CSKind::Mismatch,
                     // Only one base affected.
                     len: 1,
-                    seq: Some(elems.into_iter().map(|e| char::from(*e)).join("")),
+                    seq: Some(Cow::Borrowed(str::from_utf8(
+                        &cs[offset..offset + elems_len],
+                    )?)),
                 });
+                offset += elems_len;
                 curr_op.take();
             }
             // Insertion/deletion
             (Some(op), CSToken::Base) => {
                 let op_kind: CSKind = op.clone().try_into()?;
+                let elems_len = elems.count();
                 new_ops.push(CSOp {
                     kind: op_kind,
-                    len: elems.len(),
-                    seq: Some(elems.into_iter().map(|e| char::from(*e)).join("")),
+                    len: elems_len,
+                    seq: Some(Cow::Borrowed(str::from_utf8(
+                        &cs[offset..offset + elems_len],
+                    )?)),
                 });
+                offset += elems_len;
                 curr_op.take();
             }
             (Some(CSToken::Intron), _) => {
@@ -134,6 +150,7 @@ pub fn cs_str_to_cs_ops(cs: &str) -> Result<Vec<CSOp>, Box<dyn Error>> {
             ))?,
         }
     }
+
     Ok(new_ops)
 }
 
@@ -217,7 +234,12 @@ pub fn cg_str_to_cg_ops(cg: &str) -> Result<Vec<CigarOp>, Box<dyn Error>> {
 ///     ":2*cg-aa:3"
 /// )
 /// ```
-pub fn cg_to_cs(cg: &str, tseq: &str, qseq: &str, no_iden: bool) -> Result<CS, Box<dyn Error>> {
+pub fn cg_to_cs<'src>(
+    cg: &'src str,
+    tseq: &str,
+    qseq: &str,
+    no_iden: bool,
+) -> Result<CS<'src>, Box<dyn Error>> {
     let (mut q_off, mut t_off) = (0, 0);
     // let (mut q_len, mut t_len) = (0, 0);
     let cg_ops = cg_str_to_cg_ops(cg)?;
@@ -264,7 +286,11 @@ pub fn cg_to_cs(cg: &str, tseq: &str, qseq: &str, no_iden: bool) -> Result<CS, B
                         if !tmp_seq.is_empty() {
                             if !no_iden {
                                 // Original set index back. tmp[l_tmp] = 0
-                                ops.push(CSOp::new(CSKind::Match, tmp_seq.len(), Some(&tmp_seq)));
+                                ops.push(CSOp::new(
+                                    CSKind::Match,
+                                    tmp_seq.len(),
+                                    Some(Cow::Owned(tmp_seq.clone())),
+                                ));
                             } else {
                                 ops.push(CSOp::new(CSKind::Match, tmp_seq.len(), None));
                             }
@@ -275,11 +301,14 @@ pub fn cg_to_cs(cg: &str, tseq: &str, qseq: &str, no_iden: bool) -> Result<CS, B
                         ops.push(CSOp {
                             kind: CSKind::Mismatch,
                             len: 1,
-                            seq: Some(format!(
-                                "{}{}",
-                                t_chr.to_ascii_lowercase(),
-                                q_chr.to_ascii_lowercase(),
-                            )),
+                            seq: Some(
+                                format!(
+                                    "{}{}",
+                                    t_chr.to_ascii_lowercase(),
+                                    q_chr.to_ascii_lowercase(),
+                                )
+                                .into(),
+                            ),
                         })
                     } else {
                         tmp_seq.push(q_chr);
@@ -287,7 +316,11 @@ pub fn cg_to_cs(cg: &str, tseq: &str, qseq: &str, no_iden: bool) -> Result<CS, B
                 }
                 if !tmp_seq.is_empty() {
                     if !no_iden {
-                        ops.push(CSOp::new(CSKind::Match, tmp_seq.len(), Some(&tmp_seq)));
+                        ops.push(CSOp::new(
+                            CSKind::Match,
+                            tmp_seq.len(),
+                            Some(Cow::Owned(tmp_seq.to_owned())),
+                        ));
                     } else {
                         ops.push(CSOp::new(CSKind::Match, tmp_seq.len(), None));
                     }
@@ -306,7 +339,11 @@ pub fn cg_to_cs(cg: &str, tseq: &str, qseq: &str, no_iden: bool) -> Result<CS, B
                     };
                     tmp_seq.push(q_chr.to_ascii_lowercase());
                 }
-                ops.push(CSOp::new(CSKind::Insertion, tmp_seq.len(), Some(&tmp_seq)));
+                ops.push(CSOp::new(
+                    CSKind::Insertion,
+                    tmp_seq.len(),
+                    Some(Cow::Owned(tmp_seq.clone())),
+                ));
                 q_off += len;
             }
             Kind::Deletion => {
@@ -319,7 +356,11 @@ pub fn cg_to_cs(cg: &str, tseq: &str, qseq: &str, no_iden: bool) -> Result<CS, B
                     };
                     tmp_seq.push(t_chr.to_ascii_lowercase());
                 }
-                ops.push(CSOp::new(CSKind::Deletion, tmp_seq.len(), Some(&tmp_seq)));
+                ops.push(CSOp::new(
+                    CSKind::Deletion,
+                    tmp_seq.len(),
+                    Some(Cow::Owned(tmp_seq.clone())),
+                ));
                 t_off += len;
             }
             _ => unimplemented!("Not implemented: {cg_op:?}"),
