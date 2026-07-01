@@ -180,13 +180,18 @@ pub fn cs_str_to_cs_ops<'src>(cs: &'src str) -> Result<Vec<CSOp<'src>>, Box<dyn 
 pub fn cg_str_to_cg_ops(cg: &str) -> Result<Vec<CigarOp>, Box<dyn Error>> {
     let mut ops = vec![];
     let mut prev_num: Option<usize> = None;
+    let mut offset = 0;
+    let cg = cg.as_bytes();
+
     for (kind, elems) in &cg
-        .chars()
-        .chunk_by(|c| TryInto::<CGToken>::try_into(*c as u8).unwrap())
+        .iter()
+        .chunk_by(|c| TryInto::<CGToken>::try_into(**c).unwrap())
     {
         match (prev_num.as_mut(), &kind) {
             (None, CGToken::Number) => {
-                prev_num = Some(elems.into_iter().collect::<String>().parse()?)
+                let elems_counts = elems.count();
+                prev_num = Some(str::from_utf8(&cg[offset..offset + elems_counts])?.parse()?);
+                offset += elems_counts;
             }
             (None, CGToken::Kind(kind)) => {
                 Err(format!("Invalid starting token ({kind:?})"))?;
@@ -194,9 +199,12 @@ pub fn cg_str_to_cg_ops(cg: &str) -> Result<Vec<CigarOp>, Box<dyn Error>> {
             (Some(number), CGToken::Kind(kind)) => {
                 ops.push(CigarOp::new(*kind, *number));
                 prev_num.take();
+                offset += 1;
             }
             (Some(number), CGToken::Number) => {
-                let curr_num: usize = elems.into_iter().collect::<String>().parse()?;
+                let elems_counts = elems.count();
+                let curr_num: usize =
+                    str::from_utf8(&cg[offset..offset + elems_counts])?.parse()?;
                 Err(format!(
                     "Invalid number followed by number ({number:?}, {curr_num:?})"
                 ))?;

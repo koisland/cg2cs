@@ -27,11 +27,7 @@ pub struct CSOp<'src> {
 
 impl<'src> CSOp<'src> {
     pub(crate) fn new(kind: CSKind, len: usize, seq: Option<Cow<'src, str>>) -> Self {
-        Self {
-            kind,
-            len,
-            seq: seq,
-        }
+        Self { kind, len, seq }
     }
 
     /// `cs` operation kind
