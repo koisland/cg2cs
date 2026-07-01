@@ -26,7 +26,7 @@ pub use cs::{CS, CSKind, CSOp};
 /// )
 /// ```
 pub fn cs_to_cg(cs: &str) -> Result<Cigar, Box<dyn Error>> {
-    let cg_ops: Vec<CigarOp> = cs_str_to_cs_ops(cs)?
+    let cg_ops: Vec<CigarOp> = cs_str_to_cs_ops(cs, false)?
         .into_iter()
         .map(CigarOp::from)
         .collect();
@@ -38,6 +38,8 @@ pub fn cs_to_cg(cs: &str) -> Result<Cigar, Box<dyn Error>> {
 /// # Args
 /// * `cs`
 ///     * `cs` string without tag prefix.
+/// * `with_seq`
+///     * Include any sequence in `cs` operations.
 ///
 /// # Returns
 /// * Cigar operations as [`CigarOp`].
@@ -46,7 +48,7 @@ pub fn cs_to_cg(cs: &str) -> Result<Cigar, Box<dyn Error>> {
 /// ```
 /// use cg2cs::{cs_str_to_cs_ops, CSKind};
 ///
-/// let ops = cs_str_to_cs_ops(":2*cg-aa:3").unwrap();
+/// let ops = cs_str_to_cs_ops(":2*cg-aa:3", true).unwrap();
 /// let ops: Vec<(CSKind, usize, Option<String>)> = ops
 ///     .iter()
 ///     .map(|op| (op.kind(), op.length(), op.seq().map(|s| s.to_owned())))
@@ -59,11 +61,28 @@ pub fn cs_to_cg(cs: &str) -> Result<Cigar, Box<dyn Error>> {
 /// ];
 /// assert_eq!(ops, exp)
 /// ```
-pub fn cs_str_to_cs_ops<'src>(cs: &'src str) -> Result<Vec<CSOp<'src>>, Box<dyn Error>> {
+pub fn cs_str_to_cs_ops<'src>(
+    cs: &'src str,
+    with_seq: bool,
+) -> Result<Vec<CSOp<'src>>, Box<dyn Error>> {
     let cs = cs.as_bytes();
     let mut new_ops = vec![];
     let mut curr_op: Option<CSToken> = None;
     let mut offset = 0;
+
+    // Save sequence if desired.
+    // https://stackoverflow.com/a/27895499
+    #[allow(clippy::type_complexity)]
+    let seq_save_fn: fn(
+        cs_str: &'src [u8],
+        st: usize,
+        end: usize,
+    ) -> Result<Option<Cow<'src, str>>, Box<dyn Error>> = if with_seq {
+        |cs, st, end| Ok(Some(Cow::Borrowed(str::from_utf8(&cs[st..end])?)))
+    } else {
+        |_cs, _st, _end| Ok(None)
+    };
+
     // TODO: If intron added, convert to queue.
     for (tk, elems) in &cs
         .iter()
@@ -100,9 +119,7 @@ pub fn cs_str_to_cs_ops<'src>(cs: &'src str) -> Result<Vec<CSOp<'src>>, Box<dyn 
                 new_ops.push(CSOp {
                     kind: CSKind::Match,
                     len: elems_len,
-                    seq: Some(Cow::Borrowed(str::from_utf8(
-                        &cs[offset..offset + elems_len],
-                    )?)),
+                    seq: seq_save_fn(cs, offset, offset + elems_len)?,
                 });
                 offset += elems_len;
                 curr_op.take();
@@ -114,9 +131,7 @@ pub fn cs_str_to_cs_ops<'src>(cs: &'src str) -> Result<Vec<CSOp<'src>>, Box<dyn 
                     kind: CSKind::Mismatch,
                     // Only one base affected.
                     len: 1,
-                    seq: Some(Cow::Borrowed(str::from_utf8(
-                        &cs[offset..offset + elems_len],
-                    )?)),
+                    seq: seq_save_fn(cs, offset, offset + elems_len)?,
                 });
                 offset += elems_len;
                 curr_op.take();
@@ -128,9 +143,7 @@ pub fn cs_str_to_cs_ops<'src>(cs: &'src str) -> Result<Vec<CSOp<'src>>, Box<dyn 
                 new_ops.push(CSOp {
                     kind: op_kind,
                     len: elems_len,
-                    seq: Some(Cow::Borrowed(str::from_utf8(
-                        &cs[offset..offset + elems_len],
-                    )?)),
+                    seq: seq_save_fn(cs, offset, offset + elems_len)?,
                 });
                 offset += elems_len;
                 curr_op.take();
@@ -467,5 +480,21 @@ mod test {
                 .to_vec()
             }
         )
+    }
+
+    #[test]
+    fn test_cs_no_seq() {
+        let ops = cs_str_to_cs_ops(":2*cg-aa:3", false).unwrap();
+        let ops: Vec<(CSKind, usize, Option<&str>)> = ops
+            .iter()
+            .map(|op| (op.kind(), op.length(), op.seq()))
+            .collect();
+        let exp = vec![
+            (CSKind::Match, 2, None),
+            (CSKind::Mismatch, 1, None),
+            (CSKind::Deletion, 2, None),
+            (CSKind::Match, 3, None),
+        ];
+        assert_eq!(ops, exp)
     }
 }

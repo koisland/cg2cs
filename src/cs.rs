@@ -172,7 +172,7 @@ impl<'src> CS<'src> {
     /// assert!(CS::new(":2*cg-aa:3").is_ok());
     /// ```
     pub fn new(cs: &'src str) -> Result<Self, Box<dyn Error>> {
-        cs_str_to_cs_ops(cs).map(CS::from)
+        cs_str_to_cs_ops(cs, true).map(CS::from)
     }
 
     /// Get `cs` string representation.
@@ -216,10 +216,4 @@ impl<'src> From<Vec<CSOp<'src>>> for CS<'src> {
         }
         Self { repr, ops }
     }
-}
-
-#[test]
-fn test_shit() {
-    let cs_str = CS::new(":2*cg-aa:3").unwrap();
-    eprintln!("{cs_str:?}")
 }
