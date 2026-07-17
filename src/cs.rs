@@ -1,5 +1,7 @@
 use std::{borrow::Cow, error::Error};
 
+use digits_iterator::DigitsExtension;
+
 use crate::{CigarOp, cg::Kind, cs_str_to_cs_ops};
 
 /// `cs` tag operations
@@ -52,6 +54,44 @@ impl<'src> CSOp<'src> {
     pub fn seq(&self) -> Option<&str> {
         self.seq.as_deref()
     }
+
+    /// Append operations to an existing `cs` string. Use to avoid allocating per operation with [`Into`].
+    pub fn append_to(&self, cs: &mut String) {
+        match self.kind {
+            CSKind::Match => {
+                if let Some(seq) = &self.seq {
+                    cs.push('=');
+                    cs.push_str(seq);
+                } else {
+                    cs.push(':');
+                    for digit in self.len.digits() {
+                        cs.push(
+                            char::from_digit(u32::from(digit), 10)
+                                .expect("Invalid digit in cs op length"),
+                        );
+                    }
+                }
+            }
+            CSKind::Mismatch => {
+                let seq = self.seq.as_ref().expect("Missing sequence for mismatch.");
+                cs.push('*');
+                cs.push_str(seq);
+            }
+            CSKind::Deletion => {
+                let seq = self.seq.as_ref().expect("Missing sequence for deletion.");
+                cs.push('-');
+                cs.push_str(seq);
+            }
+            CSKind::Insertion => {
+                let seq = self.seq.as_ref().expect("Missing sequence for insertion.");
+                cs.push('+');
+                cs.push_str(seq);
+            }
+            CSKind::Intron => {
+                unimplemented!("{}", format!("CSOp to String non implemented: {:?}", self))
+            }
+        }
+    }
 }
 
 impl From<CSOp<'_>> for String {
@@ -69,11 +109,11 @@ impl From<CSOp<'_>> for String {
                 format!("*{seq}")
             }
             CSKind::Deletion => {
-                let seq = op.seq.expect("Missing sequence for mismatch.");
+                let seq = op.seq.expect("Missing sequence for deletion.");
                 format!("-{}", seq)
             }
             CSKind::Insertion => {
-                let seq = op.seq.expect("Missing sequence for mismatch.");
+                let seq = op.seq.expect("Missing sequence for insertion.");
                 format!("+{}", seq)
             }
             CSKind::Intron => {
@@ -212,7 +252,7 @@ impl<'src> From<Vec<CSOp<'src>>> for CS<'src> {
     fn from(ops: Vec<CSOp<'src>>) -> Self {
         let mut repr = String::new();
         for op in ops.iter() {
-            repr.push_str(&Into::<String>::into(op.clone()));
+            op.append_to(&mut repr);
         }
         Self { repr, ops }
     }

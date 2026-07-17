@@ -1,5 +1,7 @@
 use std::error::Error;
 
+use digits_iterator::DigitsExtension;
+
 use crate::cg_str_to_cg_ops;
 
 /// From noodles
@@ -145,7 +147,13 @@ impl From<Vec<CigarOp>> for Cigar {
         let mut repr = String::new();
         for op in ops.iter() {
             let op_char: char = op.kind.into();
-            repr.push_str(&format!("{}{op_char}", op.len));
+            for digit in op.len.digits() {
+                repr.push(
+                    char::from_digit(u32::from(digit), 10)
+                        .expect("Invalid digit in cigar op length"),
+                );
+            }
+            repr.push(op_char);
         }
         Self { repr, ops }
     }
