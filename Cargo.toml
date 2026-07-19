@@ -2,6 +2,11 @@
 name = "cg2cs"
 version = "0.1.0"
 edition = "2024"
+authors = ["Keisuke K. Oshima <koisland@pm.me>"]
+description = "Library to convert cs strings to cigar strings and vice-versa."
+repository = "https://github.com/koisland/cg2cs"
+readme = "README.md"
+license = "MIT"
 
 [dependencies]
 digits_iterator = "0.1.0"
